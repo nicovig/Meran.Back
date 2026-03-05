@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36518.9 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Meran.Back", "Meran.Back\Meran.Back.csproj", "{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {526C6A9F-3203-480C-8BF8-6D0F5012E281}
+	EndGlobalSection
+EndGlobal
