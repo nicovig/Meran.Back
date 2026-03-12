@@ -6,12 +6,25 @@ using Microsoft.IdentityModel.Tokens;
 using Meran.Back.Data;
 using Meran.Back.Models;
 using Meran.Back.Services;
+using System.IdentityModel.Tokens.Jwt;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[] { "http://localhost:4200", "http://localhost:5173", "http://localhost:3000" };
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                        ?? "Host=localhost;Port=5401;Database=meran_db;Username=meran_user;Password=meran_password";
@@ -51,7 +64,31 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = securityKey,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.FromMinutes(1),
-        RoleClaimType = ClaimTypes.Role
+        RoleClaimType = ClaimTypes.Role,
+        NameClaimType = ClaimTypes.NameIdentifier
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            if (builder.Environment.IsDevelopment())
+            {
+                context.Response.Headers.Append("X-Auth-Error", context.Exception.Message);
+            }
+            return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            context.HandleResponse();
+            if (context.AuthenticateFailure != null && builder.Environment.IsDevelopment())
+            {
+                context.Response.StatusCode = 401;
+                context.Response.ContentType = "application/json";
+                var message = context.ErrorDescription ?? context.AuthenticateFailure.Message;
+                return context.Response.WriteAsJsonAsync(new { error = message });
+            }
+            return context.Response.CompleteAsync();
+        }
     };
 });
 
@@ -65,7 +102,20 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors();
+
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers.Append("X-Meran-Pipeline", context.Request.Path.ToString());
+        return Task.CompletedTask;
+    });
+    await next(context);
+});
+
 app.UseAuthentication();
+
 app.UseAuthorization();
 
 app.MapControllers();

@@ -29,23 +29,25 @@ namespace Meran.Back.Services
 
             var claims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.Role, user.Role)
+                new Claim("sub", user.Id.ToString()),
+                new Claim("email", user.Email),
+                new Claim("jti", Guid.NewGuid().ToString()),
+                new Claim("role", user.Role ?? "Admin")
             };
 
-            var expires = DateTime.UtcNow.AddMinutes(_options.AccessTokenExpiresMinutes);
+            var now = DateTime.UtcNow;
+            var expires = now.AddMinutes(_options.AccessTokenExpiresMinutes);
 
             var token = new JwtSecurityToken(
                 issuer: _options.Issuer,
                 audience: _options.Audience,
                 claims: claims,
-                notBefore: DateTime.UtcNow,
+                notBefore: now,
                 expires: expires,
                 signingCredentials: credentials);
 
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            var handler = new JwtSecurityTokenHandler();
+            return handler.WriteToken(token);
         }
 
         public DateTime GetAccessTokenExpirationUtc()

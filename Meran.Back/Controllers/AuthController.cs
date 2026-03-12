@@ -24,43 +24,6 @@ namespace Meran.Back.Controllers
             _tokenService = tokenService;
         }
 
-        [HttpPost("register")]
-        public async Task<ActionResult<AuthResponseDto>> Register(RegisterRequestDto request, CancellationToken cancellationToken)
-        {
-            var email = request.Email.Trim().ToLowerInvariant();
-
-            var exists = await _dbContext.Administrators.AnyAsync(x => x.Email == email, cancellationToken);
-            if (exists)
-            {
-                return Conflict(new { message = "Email already in use" });
-            }
-
-            var user = new Administrator
-            {
-                Id = Guid.NewGuid(),
-                Email = email,
-                PasswordHash = HashPassword(request.Password),
-                DisplayName = request.DisplayName ?? email,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _dbContext.Administrators.Add(user);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            var token = _tokenService.GenerateAccessToken(user);
-            var expiresAt = _tokenService.GetAccessTokenExpirationUtc();
-
-            var response = new AuthResponseDto
-            {
-                AccessToken = token,
-                ExpiresAtUtc = expiresAt,
-                User = ToUserDto(user)
-            };
-
-            return CreatedAtAction(nameof(GetMe), new { }, response);
-        }
-
         [HttpPost("login")]
         public async Task<ActionResult<AuthResponseDto>> Login(LoginRequestDto request, CancellationToken cancellationToken)
         {
@@ -95,30 +58,6 @@ namespace Meran.Back.Controllers
             return Ok(response);
         }
 
-        [Authorize]
-        [HttpGet("me")]
-        public async Task<ActionResult<UserDto>> GetMe(CancellationToken cancellationToken)
-        {
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-                              User.FindFirstValue("sub");
-
-            if (!Guid.TryParse(userIdClaim, out var userId))
-            {
-                return Unauthorized();
-            }
-
-            var user = await _dbContext.Administrators
-                .AsNoTracking()
-                .Where(x => x.Id == userId)
-                .SingleOrDefaultAsync(cancellationToken);
-
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            return Ok(ToUserDto(user));
-        }
 
         private static string HashPassword(string password)
         {

@@ -21,6 +21,7 @@ namespace Meran.Back.Controllers
         public async Task<ActionResult<List<ApplicationDto>>> GetAll(CancellationToken cancellationToken)
         {
             var result = await _applicationService.GetAllAsync(cancellationToken);
+            Response.Headers.Append("X-Meran-Hit", "ApplicationsController.GetAll");
             return Ok(result);
         }
 
