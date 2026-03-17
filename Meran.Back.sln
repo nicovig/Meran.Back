@@ -1,9 +1,10 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.14.36518.9 d17.14
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11520.95 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Meran.Back", "Meran.Back\Meran.Back.csproj", "{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Meran.Back.Tests", "Meran.Back.Tests\Meran.Back.Tests.csproj", "{A34B690C-3B51-4FD4-B8DD-4F551A269066}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +16,10 @@ Global
 		{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5DB65916-BAF7-4CA7-9FFC-AE91196B974A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A34B690C-3B51-4FD4-B8DD-4F551A269066}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A34B690C-3B51-4FD4-B8DD-4F551A269066}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A34B690C-3B51-4FD4-B8DD-4F551A269066}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A34B690C-3B51-4FD4-B8DD-4F551A269066}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
