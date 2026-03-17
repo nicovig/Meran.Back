@@ -77,26 +77,38 @@ public class ApplicationServiceTest
     {
         using var context = CreateInMemoryDbContext();
 
-        var app = new Application
+        var service = new ApplicationService(context);
+
+        var created = await service.CreateAsync(new CreateApplicationRequestDto
         {
-            Id = Guid.NewGuid(),
             Name = "Old",
             Description = "Old",
-            Format = ApplicationFormat.Free,
-            CreatedAt = DateTime.UtcNow
-        };
+            Format = "subscription",
+            Plans = new List<ApplicationPlanDto>
+            {
+                new ApplicationPlanDto
+                {
+                    Name = "Old plan",
+                    Description = "Old plan desc",
+                    BillingPeriod = "monthly",
+                    Price = 50
+                }
+            }
+        }, CancellationToken.None);
 
-        context.Applications.Add(app);
         await context.SaveChangesAsync();
 
-        var service = new ApplicationService(context);
+        var createdId = created.Id;
+        Assert.That(createdId, Is.Not.Empty);
+
+        var createdDb = context.Applications.FirstOrDefaultAsync(a => a.Id == createdId);
+        Assert.That(createdDb, Is.Not.Null);
 
         var request = new UpdateApplicationRequestDto
         {
             Name = "New name",
             Description = "New desc",
             Format = "subscription",
-            OneShotPrice = 20,
             Plans = new List<ApplicationPlanDto>
             {
                 new ApplicationPlanDto
@@ -109,14 +121,14 @@ public class ApplicationServiceTest
             }
         };
 
-        var result = await service.UpdateAsync(app.Id, request, CancellationToken.None);
+        var result = await service.UpdateAsync(createdId, request, CancellationToken.None);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Name, Is.EqualTo("New name"));
         Assert.That(result.Plans, Has.Count.EqualTo(1));
         Assert.That(result.Plans[0].Name, Is.EqualTo("New plan"));
 
-        var appInDb = await context.Applications.Include(a => a.Plans).SingleAsync(a => a.Id == app.Id);
+        var appInDb = await context.Applications.Include(a => a.Plans).SingleAsync(a => a.Id == created.Id);
         Assert.That(appInDb.Plans.Count, Is.EqualTo(1));
         Assert.That(appInDb.Plans.Single().Name, Is.EqualTo("New plan"));
     }

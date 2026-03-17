@@ -84,20 +84,16 @@ namespace Meran.Back.Services
                 return null;
             }
 
-            app.Name = request.Name;
-            app.Description = request.Description;
-            app.Format = ParseFormat(request.Format);
-            app.OneShotPrice = request.OneShotPrice;
-
             if (request.Plans != null)
             {
                 _dbContext.ApplicationPlans.RemoveRange(app.Plans);
+                await _dbContext.SaveChangesAsync(cancellationToken);
 
                 foreach (var planDto in request.Plans)
                 {
                     var period = ParseBillingPeriod(planDto.BillingPeriod);
 
-                    app.Plans.Add(new ApplicationPlan
+                    var newPlan = new ApplicationPlan
                     {
                         Id = Guid.NewGuid(),
                         ApplicationId = app.Id,
@@ -105,9 +101,18 @@ namespace Meran.Back.Services
                         Description = planDto.Description,
                         BillingPeriod = period,
                         Price = planDto.Price
-                    });
+                    };
+
+                    _dbContext.ApplicationPlans.Add(newPlan);
                 }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
             }
+
+            app.Name = request.Name;
+            app.Description = request.Description;
+            app.Format = ParseFormat(request.Format);
+            app.OneShotPrice = request.OneShotPrice;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 

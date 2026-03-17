@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Meran.Back.Controllers;
 using Meran.Back.Data;
@@ -13,11 +14,17 @@ public class AuthControllerTest
 {
     private static ApplicationDbContext CreateInMemoryDbContext()
     {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseSqlite(connection)
             .Options;
 
-        return new ApplicationDbContext(options);
+        var context = new ApplicationDbContext(options);
+        context.Database.EnsureCreated();
+
+        return context;
     }
 
     private static string HashPassword(string password)

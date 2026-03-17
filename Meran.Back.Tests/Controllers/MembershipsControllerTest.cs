@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Meran.Back.Controllers;
 using Meran.Back.Data;
@@ -12,11 +13,17 @@ public class MembershipsControllerTest
 {
     private static ApplicationDbContext CreateInMemoryDbContext()
     {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseSqlite(connection)
             .Options;
 
-        return new ApplicationDbContext(options);
+        var context = new ApplicationDbContext(options);
+        context.Database.EnsureCreated();
+
+        return context;
     }
 
     private static MembershipsController CreateController(ApplicationDbContext context, bool authenticatedApiClient = true)
