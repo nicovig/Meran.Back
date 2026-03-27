@@ -23,6 +23,8 @@ namespace Meran.Back.Controllers
         {
             var user = await _dbContext.ApplicationUsers
                 .AsNoTracking()
+                .Include(x => x.Application)
+                .Include(x => x.Plan)
                 .SingleOrDefaultAsync(x => x.ApplicationId == applicationId && x.Id == userId, cancellationToken);
 
             if (user == null)
@@ -34,6 +36,7 @@ namespace Meran.Back.Controllers
             {
                 ApplicationId = user.ApplicationId,
                 ApplicationUserId = user.Id,
+                ApplicationPlanId = user.Plan?.Id ?? Guid.Empty,
                 IsActive = user.IsActive,
                 Plan = user.Plan,
                 LastPaymentAt = user.LastPaymentAt,

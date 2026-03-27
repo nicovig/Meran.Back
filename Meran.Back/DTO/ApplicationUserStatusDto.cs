@@ -4,6 +4,7 @@ namespace Meran.Back.DTO
     {
         public Guid ApplicationId { get; set; }
         public Guid ApplicationUserId { get; set; }
+        public Guid ApplicationPlanId { get; set; }
         public bool IsActive { get; set; }
         public string? Plan { get; set; }
         public DateTime? LastPaymentAt { get; set; }

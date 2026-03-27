@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Meran.Back.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260305154658_PaymentsSchema")]
-    partial class PaymentsSchema
+    [Migration("20260327143230_Initial migration")]
+    partial class Initialmigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -58,6 +58,10 @@ namespace Meran.Back.Migrations
                         .HasColumnName("password_hash");
 
                     b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Salt")
                         .IsRequired()
                         .HasColumnType("text");
 

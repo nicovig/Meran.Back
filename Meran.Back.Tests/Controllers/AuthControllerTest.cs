@@ -7,11 +7,28 @@ using Meran.Back.DTO;
 using Meran.Back.Models;
 using Meran.Back.Services;
 using Moq;
+using Microsoft.Extensions.Options;
 
 namespace Meran.Back.Tests.Controllers;
 
 public class AuthControllerTest
 {
+    private const string SaltInvalidPassword = "MDEyMzQ1Njc4OWFiY2RlZg==";
+    private const string SaltInactive = "MTIzNDU2Nzg5MGFiY2RlZg==";
+    private const string SaltValid = "YWJjZGVmZ2hpamtsbW5vcA==";
+
+    private static readonly PasswordOptions PasswordOptions = new()
+    {
+        Pepper = "test-pepper",
+        Iterations = 120000,
+        HashSize = 32
+    };
+
+    private static IPasswordService CreatePasswordService()
+    {
+        return new PasswordService(Options.Create(PasswordOptions));
+    }
+
     private static ApplicationDbContext CreateInMemoryDbContext()
     {
         var connection = new SqliteConnection("DataSource=:memory:");
@@ -27,21 +44,13 @@ public class AuthControllerTest
         return context;
     }
 
-    private static string HashPassword(string password)
-    {
-        var salt = "static_salt_for_now";
-        var bytes = System.Text.Encoding.UTF8.GetBytes(password + salt);
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hash = sha256.ComputeHash(bytes);
-        return Convert.ToBase64String(hash);
-    }
-
     [Test]
     public async Task Login_ReturnsUnauthorized_WhenUserDoesNotExist()
     {
         using var context = CreateInMemoryDbContext();
         var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
-        var controller = new AuthController(context, tokenServiceMock.Object);
+        var passwordService = CreatePasswordService();
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
 
         var request = new LoginRequestDto
         {
@@ -59,13 +68,16 @@ public class AuthControllerTest
     {
         using var context = CreateInMemoryDbContext();
         var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
-        var controller = new AuthController(context, tokenServiceMock.Object);
+        var passwordService = CreatePasswordService();
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
 
+        const string salt = SaltInvalidPassword;
         var admin = new Administrator
         {
             Id = Guid.NewGuid(),
             Email = "admin@example.com",
-            PasswordHash = HashPassword("correct-password"),
+            Salt = salt,
+            PasswordHash = passwordService.HashPassword("correct-password", salt),
             DisplayName = "Admin",
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
@@ -91,13 +103,16 @@ public class AuthControllerTest
     {
         using var context = CreateInMemoryDbContext();
         var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
-        var controller = new AuthController(context, tokenServiceMock.Object);
+        var passwordService = CreatePasswordService();
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
 
+        const string salt = SaltInactive;
         var admin = new Administrator
         {
             Id = Guid.NewGuid(),
             Email = "admin@example.com",
-            PasswordHash = HashPassword("password"),
+            Salt = salt,
+            PasswordHash = passwordService.HashPassword("password", salt),
             DisplayName = "Admin",
             IsActive = false,
             CreatedAt = DateTime.UtcNow,
@@ -123,12 +138,15 @@ public class AuthControllerTest
     {
         using var context = CreateInMemoryDbContext();
         var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
+        var passwordService = CreatePasswordService();
 
+        const string salt = SaltValid;
         var admin = new Administrator
         {
             Id = Guid.NewGuid(),
             Email = "admin@example.com",
-            PasswordHash = HashPassword("password"),
+            Salt = salt,
+            PasswordHash = passwordService.HashPassword("password", salt),
             DisplayName = "Admin",
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
@@ -148,7 +166,7 @@ public class AuthControllerTest
             .Setup(s => s.GetAccessTokenExpirationUtc())
             .Returns(expectedExpiry);
 
-        var controller = new AuthController(context, tokenServiceMock.Object);
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
 
         var request = new LoginRequestDto
         {
@@ -169,6 +187,40 @@ public class AuthControllerTest
         Assert.That(response.User.DisplayName, Is.EqualTo(admin.DisplayName));
 
         tokenServiceMock.VerifyAll();
+    }
+
+    [Test]
+    public async Task Login_ReturnsUnauthorized_WhenSaltFormatIsInvalid()
+    {
+        using var context = CreateInMemoryDbContext();
+        var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
+        var passwordService = CreatePasswordService();
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
+
+        var admin = new Administrator
+        {
+            Id = Guid.NewGuid(),
+            Email = "admin@example.com",
+            Salt = "invalid-salt",
+            PasswordHash = "invalid-hash",
+            DisplayName = "Admin",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        context.Administrators.Add(admin);
+        await context.SaveChangesAsync();
+
+        var request = new LoginRequestDto
+        {
+            Email = "admin@example.com",
+            Password = "password"
+        };
+
+        var result = await controller.Login(request, CancellationToken.None);
+
+        Assert.That(result.Result, Is.TypeOf<UnauthorizedObjectResult>());
     }
 }
 

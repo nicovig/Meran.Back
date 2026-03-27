@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,11 +15,13 @@ namespace Meran.Back.Controllers
     {
         private readonly ApplicationDbContext _dbContext;
         private readonly ITokenService _tokenService;
+        private readonly IPasswordService _passwordService;
 
-        public AuthController(ApplicationDbContext dbContext, ITokenService tokenService)
+        public AuthController(ApplicationDbContext dbContext, ITokenService tokenService, IPasswordService passwordService)
         {
             _dbContext = dbContext;
             _tokenService = tokenService;
+            _passwordService = passwordService;
         }
 
         [HttpPost("login")]
@@ -35,7 +35,7 @@ namespace Meran.Back.Controllers
                 return Unauthorized(new { message = "Invalid credentials" });
             }
 
-            if (!VerifyPassword(request.Password, user.PasswordHash))
+            if (!_passwordService.VerifyPassword(request.Password, user.PasswordHash, user.Salt))
             {
                 return Unauthorized(new { message = "Invalid credentials" });
             }
@@ -56,23 +56,6 @@ namespace Meran.Back.Controllers
             };
 
             return Ok(response);
-        }
-
-
-        private static string HashPassword(string password)
-        {
-            var salt = "static_salt_for_now";
-            var bytes = Encoding.UTF8.GetBytes(password + salt);
-
-            using var sha256 = SHA256.Create();
-            var hash = sha256.ComputeHash(bytes);
-            return Convert.ToBase64String(hash);
-        }
-
-        private static bool VerifyPassword(string password, string passwordHash)
-        {
-            var computed = HashPassword(password);
-            return passwordHash == computed;
         }
 
         private static UserDto ToUserDto(Administrator user)
