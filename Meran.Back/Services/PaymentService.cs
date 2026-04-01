@@ -23,6 +23,7 @@ namespace Meran.Back.Services
         public async Task<PaymentEventDto?> AddPaymentAsync(Guid applicationId, Guid applicationUserId, CreatePaymentEventRequestDto request, CancellationToken cancellationToken)
         {
             var user = await _dbContext.ApplicationUsers
+                .Include(x => x.Subscriptions)
                 .SingleOrDefaultAsync(x => x.ApplicationId == applicationId && x.Id == applicationUserId, cancellationToken);
 
             if (user == null)
@@ -30,14 +31,25 @@ namespace Meran.Back.Services
                 return null;
             }
 
-            var type = ParsePaymentEventType(request.Type);
+            var subscription = user.Subscriptions
+                .OrderByDescending(x => x.StartedAt)
+                .FirstOrDefault();
+
+            if (subscription == null)
+            {
+                return null;
+            }
+
+            var eventType = ParsePaymentEventType(request.Type);
+            var status = request.Status ?? "processed";
 
             var evt = new PaymentEvent
             {
                 Id = Guid.NewGuid(),
                 ApplicationId = applicationId,
-                ApplicationUserId = applicationUserId,
-                Type = type,
+                SubscriptionId = subscription.Id,
+                EventType = eventType,
+                Status = status,
                 Amount = request.Amount,
                 Currency = request.Currency,
                 OccurredAt = request.OccurredAt,
@@ -48,25 +60,26 @@ namespace Meran.Back.Services
 
             _dbContext.PaymentEvents.Add(evt);
 
-            if (type == PaymentEventType.Initial || type == PaymentEventType.Recurring)
+            if (eventType == PaymentEventType.PaymentSucceeded || eventType == PaymentEventType.InvoiceCreated)
             {
                 user.IsActive = true;
-                user.LastPaymentAt = request.OccurredAt;
-                user.LastPaymentAmount = request.Amount;
-                user.LastPaymentCurrency = request.Currency;
-                user.PaymentProvider = request.Provider;
-                user.PaymentReference = request.ProviderReference;
-                user.HasPaymentIssue = false;
+                subscription.Status = SubscriptionStatus.Active;
 
                 if (request.NextPaymentDueAt.HasValue)
                 {
-                    user.NextPaymentDueAt = request.NextPaymentDueAt;
+                    subscription.CurrentPeriodEnd = request.NextPaymentDueAt.Value;
                 }
             }
 
-            if (type == PaymentEventType.Canceled || type == PaymentEventType.Failed)
+            if (eventType == PaymentEventType.PaymentFailed)
             {
-                user.HasPaymentIssue = true;
+                subscription.Status = SubscriptionStatus.PastDue;
+            }
+
+            if (eventType == PaymentEventType.Refund)
+            {
+                subscription.Status = SubscriptionStatus.Canceled;
+                subscription.EndedAt = request.OccurredAt;
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -76,34 +89,42 @@ namespace Meran.Back.Services
 
         public async Task<PaymentsOverviewDto> GetOverviewAsync(Guid? applicationId, CancellationToken cancellationToken)
         {
-            var paymentsQuery = _dbContext.PaymentEvents.AsNoTracking();
-            var usersQuery = _dbContext.ApplicationUsers.AsNoTracking().Include(u => u.Application).AsQueryable();
+            IQueryable<PaymentEvent> paymentsQuery = _dbContext.PaymentEvents
+                .AsNoTracking()
+                .Include(x => x.Subscription);
+            var subscriptionsQuery = _dbContext.Subscriptions
+                .AsNoTracking()
+                .Include(x => x.ApplicationPlan)
+                .Include(x => x.ApplicationUser)
+                .ThenInclude(x => x.Application)
+                .AsQueryable();
 
             if (applicationId.HasValue)
             {
                 paymentsQuery = paymentsQuery.Where(x => x.ApplicationId == applicationId.Value);
-                usersQuery = usersQuery.Where(x => x.ApplicationId == applicationId.Value);
+                subscriptionsQuery = subscriptionsQuery.Where(x => x.ApplicationUser.ApplicationId == applicationId.Value);
             }
 
             var payments = await paymentsQuery
                 .OrderByDescending(x => x.OccurredAt)
                 .ToListAsync(cancellationToken);
 
-            var users = await usersQuery.ToListAsync(cancellationToken);
+            var subscriptions = await subscriptionsQuery.ToListAsync(cancellationToken);
 
             var overview = new PaymentsOverviewDto
             {
                 PastPayments = payments.Select(ToDto).ToList(),
-                UpcomingPayments = users
-                    .Where(u => u.IsActive && u.NextPaymentDueAt.HasValue)
-                    .Select(u => new ScheduledPaymentDto
+                UpcomingPayments = subscriptions
+                    .Where(x => x.Status == SubscriptionStatus.Active && x.CurrentPeriodEnd > DateTime.UtcNow)
+                    .Select(x => new ScheduledPaymentDto
                     {
-                        ApplicationId = u.ApplicationId,
-                        ApplicationUserId = u.Id,
-                        NextPaymentDueAt = u.NextPaymentDueAt!.Value,
-                        Plan = u.Plan,
-                        ExpectedAmount = u.LastPaymentAmount,
-                        Currency = u.LastPaymentCurrency
+                        ApplicationId = x.ApplicationUser.ApplicationId,
+                        ApplicationUserId = x.ApplicationUserId,
+                        SubscriptionId = x.Id,
+                        NextPaymentDueAt = x.CurrentPeriodEnd,
+                        Plan = x.ApplicationPlan.Name,
+                        ExpectedAmount = x.ApplicationPlan.Price,
+                        Currency = "EUR"
                     })
                     .ToList()
             };
@@ -115,11 +136,15 @@ namespace Meran.Back.Services
         {
             return value switch
             {
-                "initial" => PaymentEventType.Initial,
-                "recurring" => PaymentEventType.Recurring,
-                "failed" => PaymentEventType.Failed,
-                "canceled" => PaymentEventType.Canceled,
-                "refunded" => PaymentEventType.Refunded,
+                "initial" => PaymentEventType.PaymentSucceeded,
+                "recurring" => PaymentEventType.PaymentSucceeded,
+                "failed" => PaymentEventType.PaymentFailed,
+                "canceled" => PaymentEventType.Refund,
+                "refunded" => PaymentEventType.Refund,
+                "paymentSucceeded" => PaymentEventType.PaymentSucceeded,
+                "paymentFailed" => PaymentEventType.PaymentFailed,
+                "refund" => PaymentEventType.Refund,
+                "invoiceCreated" => PaymentEventType.InvoiceCreated,
                 _ => throw new ArgumentOutOfRangeException(nameof(value), "Unsupported payment event type.")
             };
         }
@@ -128,12 +153,11 @@ namespace Meran.Back.Services
         {
             return type switch
             {
-                PaymentEventType.Initial => "initial",
-                PaymentEventType.Recurring => "recurring",
-                PaymentEventType.Failed => "failed",
-                PaymentEventType.Canceled => "canceled",
-                PaymentEventType.Refunded => "refunded",
-                _ => "initial"
+                PaymentEventType.PaymentSucceeded => "paymentSucceeded",
+                PaymentEventType.PaymentFailed => "paymentFailed",
+                PaymentEventType.Refund => "refund",
+                PaymentEventType.InvoiceCreated => "invoiceCreated",
+                _ => "paymentSucceeded"
             };
         }
 
@@ -143,8 +167,10 @@ namespace Meran.Back.Services
             {
                 Id = evt.Id,
                 ApplicationId = evt.ApplicationId,
-                ApplicationUserId = evt.ApplicationUserId,
-                Type = PaymentEventTypeToString(evt.Type),
+                ApplicationUserId = evt.Subscription.ApplicationUserId,
+                SubscriptionId = evt.SubscriptionId,
+                EventType = PaymentEventTypeToString(evt.EventType),
+                Status = evt.Status,
                 Amount = evt.Amount,
                 Currency = evt.Currency,
                 OccurredAt = evt.OccurredAt,

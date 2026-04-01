@@ -75,6 +75,68 @@ namespace Meran.Back.Controllers
                 return Conflict(new { message = ex.Message });
             }
         }
+
+        [HttpGet("{applicationId:guid}/features")]
+        public async Task<ActionResult<List<ApplicationFeatureDto>>> GetFeatures(Guid applicationId, CancellationToken cancellationToken)
+        {
+            var features = await _applicationService.GetFeaturesAsync(applicationId, cancellationToken);
+            if (features == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(features);
+        }
+
+        [HttpPut("{applicationId:guid}/features")]
+        public async Task<ActionResult<List<ApplicationFeatureDto>>> UpsertFeatures(Guid applicationId, UpsertApplicationFeaturesRequestDto request, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var features = await _applicationService.UpsertFeaturesAsync(applicationId, request, cancellationToken);
+                if (features == null)
+                {
+                    return NotFound();
+                }
+
+                return Ok(features);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("{applicationId:guid}/users/{applicationUserId:guid}/subscriptions")]
+        public async Task<ActionResult<List<SubscriptionDto>>> GetSubscriptions(Guid applicationId, Guid applicationUserId, CancellationToken cancellationToken)
+        {
+            var subscriptions = await _applicationService.GetSubscriptionsAsync(applicationId, applicationUserId, cancellationToken);
+            if (subscriptions == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(subscriptions);
+        }
+
+        [HttpPost("{applicationId:guid}/users/{applicationUserId:guid}/subscriptions")]
+        public async Task<ActionResult<SubscriptionDto>> CreateSubscription(Guid applicationId, Guid applicationUserId, CreateSubscriptionRequestDto request, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var subscription = await _applicationService.CreateSubscriptionAsync(applicationId, applicationUserId, request, cancellationToken);
+                if (subscription == null)
+                {
+                    return NotFound();
+                }
+
+                return Ok(subscription);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+        }
     }
 }
 

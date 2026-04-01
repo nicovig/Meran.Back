@@ -28,8 +28,21 @@ public class NotificationServiceTest
             Name = "App",
             Description = "Desc",
             Format = ApplicationFormat.Subscription,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            Plans = new List<ApplicationPlan>
+            {
+                new ApplicationPlan
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Pro",
+                    Description = "Pro",
+                    BillingPeriod = BillingPeriod.Monthly,
+                    Price = 20
+                }
+            }
         };
+
+        var plan = app.Plans.Single();
 
         var overdueUser = new ApplicationUser
         {
@@ -39,10 +52,7 @@ public class NotificationServiceTest
             Email = "overdue@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "pro",
-            IsActive = true,
-            NextPaymentDueAt = DateTime.UtcNow.AddDays(-1),
-            HasPaymentIssue = false
+            IsActive = true
         };
 
         var upToDateUser = new ApplicationUser
@@ -53,15 +63,34 @@ public class NotificationServiceTest
             Email = "ok@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "basic",
-            IsActive = true,
-            NextPaymentDueAt = DateTime.UtcNow.AddDays(10),
-            HasPaymentIssue = false
+            IsActive = true
+        };
+
+        var overdueSubscription = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = overdueUser.Id,
+            ApplicationPlanId = plan.Id,
+            Status = SubscriptionStatus.Active,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(-1)
+        };
+
+        var upToDateSubscription = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = upToDateUser.Id,
+            ApplicationPlanId = plan.Id,
+            Status = SubscriptionStatus.Active,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(10)
         };
 
         context.Applications.Add(app);
         context.ApplicationUsers.Add(overdueUser);
         context.ApplicationUsers.Add(upToDateUser);
+        context.Subscriptions.Add(overdueSubscription);
+        context.Subscriptions.Add(upToDateSubscription);
         await context.SaveChangesAsync();
 
         var service = new NotificationService(context);
@@ -73,11 +102,13 @@ public class NotificationServiceTest
 
         var refreshedOverdue = await context.ApplicationUsers.SingleAsync(u => u.Id == overdueUser.Id);
         var refreshedUpToDate = await context.ApplicationUsers.SingleAsync(u => u.Id == upToDateUser.Id);
+        var refreshedOverdueSubscription = await context.Subscriptions.SingleAsync(x => x.Id == overdueSubscription.Id);
+        var refreshedUpToDateSubscription = await context.Subscriptions.SingleAsync(x => x.Id == upToDateSubscription.Id);
 
         Assert.That(refreshedOverdue.IsActive, Is.False);
-        Assert.That(refreshedOverdue.HasPaymentIssue, Is.True);
         Assert.That(refreshedUpToDate.IsActive, Is.True);
-        Assert.That(refreshedUpToDate.HasPaymentIssue, Is.False);
+        Assert.That(refreshedOverdueSubscription.Status, Is.EqualTo(SubscriptionStatus.PastDue));
+        Assert.That(refreshedUpToDateSubscription.Status, Is.EqualTo(SubscriptionStatus.Active));
     }
 
     [Test]
@@ -91,8 +122,21 @@ public class NotificationServiceTest
             Name = "App",
             Description = "Desc",
             Format = ApplicationFormat.Subscription,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            Plans = new List<ApplicationPlan>
+            {
+                new ApplicationPlan
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Pro",
+                    Description = "Pro",
+                    BillingPeriod = BillingPeriod.Monthly,
+                    Price = 20
+                }
+            }
         };
+
+        var plan = app.Plans.Single();
 
         var user = new ApplicationUser
         {
@@ -102,14 +146,22 @@ public class NotificationServiceTest
             Email = "user@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "pro",
-            IsActive = true,
-            NextPaymentDueAt = DateTime.UtcNow.AddDays(5),
-            HasPaymentIssue = false
+            IsActive = true
+        };
+
+        var subscription = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = user.Id,
+            ApplicationPlanId = plan.Id,
+            Status = SubscriptionStatus.Active,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(5)
         };
 
         context.Applications.Add(app);
         context.ApplicationUsers.Add(user);
+        context.Subscriptions.Add(subscription);
         await context.SaveChangesAsync();
 
         var service = new NotificationService(context);
@@ -119,8 +171,9 @@ public class NotificationServiceTest
         Assert.That(result, Is.Empty);
 
         var refreshedUser = await context.ApplicationUsers.SingleAsync(u => u.Id == user.Id);
+        var refreshedSubscription = await context.Subscriptions.SingleAsync(x => x.Id == subscription.Id);
         Assert.That(refreshedUser.IsActive, Is.True);
-        Assert.That(refreshedUser.HasPaymentIssue, Is.False);
+        Assert.That(refreshedSubscription.Status, Is.EqualTo(SubscriptionStatus.Active));
     }
 
     [Test]
@@ -134,8 +187,21 @@ public class NotificationServiceTest
             Name = "App",
             Description = "Desc",
             Format = ApplicationFormat.Subscription,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            Plans = new List<ApplicationPlan>
+            {
+                new ApplicationPlan
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Pro",
+                    Description = "Pro",
+                    BillingPeriod = BillingPeriod.Monthly,
+                    Price = 20
+                }
+            }
         };
+
+        var plan = app.Plans.Single();
 
         var userWithIssue = new ApplicationUser
         {
@@ -145,9 +211,7 @@ public class NotificationServiceTest
             Email = "issue@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "pro",
-            IsActive = false,
-            HasPaymentIssue = true
+            IsActive = false
         };
 
         var userWithoutIssue = new ApplicationUser
@@ -158,14 +222,34 @@ public class NotificationServiceTest
             Email = "ok@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "basic",
-            IsActive = true,
-            HasPaymentIssue = false
+            IsActive = true
+        };
+
+        var issueSubscription = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = userWithIssue.Id,
+            ApplicationPlanId = plan.Id,
+            Status = SubscriptionStatus.PastDue,
+            StartedAt = DateTime.UtcNow.AddMonths(-2),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(-2)
+        };
+
+        var okSubscription = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = userWithoutIssue.Id,
+            ApplicationPlanId = plan.Id,
+            Status = SubscriptionStatus.Active,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(10)
         };
 
         context.Applications.Add(app);
         context.ApplicationUsers.Add(userWithIssue);
         context.ApplicationUsers.Add(userWithoutIssue);
+        context.Subscriptions.Add(issueSubscription);
+        context.Subscriptions.Add(okSubscription);
         await context.SaveChangesAsync();
 
         var service = new NotificationService(context);

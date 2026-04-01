@@ -246,5 +246,140 @@ public class ApplicationsControllerTest
         Assert.That(result.Result, Is.TypeOf<ConflictObjectResult>());
         serviceMock.VerifyAll();
     }
+
+    [Test]
+    public async Task GetFeatures_ReturnsOk_WhenFeaturesExist()
+    {
+        var (controller, serviceMock) = CreateController();
+        var applicationId = Guid.NewGuid();
+        var features = new List<ApplicationFeatureDto>
+        {
+            new ApplicationFeatureDto
+            {
+                Id = Guid.NewGuid(),
+                Key = "maxProjects",
+                Type = "integer",
+                PlanValues = new List<ApplicationFeaturePlanValueDto>
+                {
+                    new ApplicationFeaturePlanValueDto { ApplicationPlanId = Guid.NewGuid(), Value = "10" }
+                }
+            }
+        };
+
+        serviceMock
+            .Setup(s => s.GetFeaturesAsync(applicationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(features);
+
+        var result = await controller.GetFeatures(applicationId, CancellationToken.None);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result!;
+        Assert.That(ok.Value, Is.EqualTo(features));
+        serviceMock.VerifyAll();
+    }
+
+    [Test]
+    public async Task UpsertFeatures_ReturnsOk_WhenServiceSucceeds()
+    {
+        var (controller, serviceMock) = CreateController();
+        var applicationId = Guid.NewGuid();
+        var request = new UpsertApplicationFeaturesRequestDto
+        {
+            Features = new List<UpsertApplicationFeatureRequestDto>
+            {
+                new UpsertApplicationFeatureRequestDto
+                {
+                    Key = "maxProjects",
+                    Type = "integer",
+                    PlanValues = new List<ApplicationFeaturePlanValueDto>
+                    {
+                        new ApplicationFeaturePlanValueDto { ApplicationPlanId = Guid.NewGuid(), Value = "10" }
+                    }
+                }
+            }
+        };
+
+        var features = new List<ApplicationFeatureDto>
+        {
+            new ApplicationFeatureDto
+            {
+                Id = Guid.NewGuid(),
+                Key = "maxProjects",
+                Type = "integer"
+            }
+        };
+
+        serviceMock
+            .Setup(s => s.UpsertFeaturesAsync(applicationId, request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(features);
+
+        var result = await controller.UpsertFeatures(applicationId, request, CancellationToken.None);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        serviceMock.VerifyAll();
+    }
+
+    [Test]
+    public async Task GetSubscriptions_ReturnsOk_WhenSubscriptionsExist()
+    {
+        var (controller, serviceMock) = CreateController();
+        var applicationId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var subscriptions = new List<SubscriptionDto>
+        {
+            new SubscriptionDto
+            {
+                Id = Guid.NewGuid(),
+                ApplicationUserId = userId,
+                ApplicationPlanId = Guid.NewGuid(),
+                Status = "active",
+                StartedAt = DateTime.UtcNow,
+                CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1)
+            }
+        };
+
+        serviceMock
+            .Setup(s => s.GetSubscriptionsAsync(applicationId, userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(subscriptions);
+
+        var result = await controller.GetSubscriptions(applicationId, userId, CancellationToken.None);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        serviceMock.VerifyAll();
+    }
+
+    [Test]
+    public async Task CreateSubscription_ReturnsOk_WhenServiceSucceeds()
+    {
+        var (controller, serviceMock) = CreateController();
+        var applicationId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var request = new CreateSubscriptionRequestDto
+        {
+            ApplicationPlanId = Guid.NewGuid(),
+            Status = "active",
+            StartedAt = DateTime.UtcNow,
+            CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1)
+        };
+
+        var subscription = new SubscriptionDto
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = userId,
+            ApplicationPlanId = request.ApplicationPlanId,
+            Status = "active",
+            StartedAt = request.StartedAt,
+            CurrentPeriodEnd = request.CurrentPeriodEnd
+        };
+
+        serviceMock
+            .Setup(s => s.CreateSubscriptionAsync(applicationId, userId, request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(subscription);
+
+        var result = await controller.CreateSubscription(applicationId, userId, request, CancellationToken.None);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        serviceMock.VerifyAll();
+    }
 }
 

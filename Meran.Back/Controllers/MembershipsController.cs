@@ -24,7 +24,8 @@ namespace Meran.Back.Controllers
             var user = await _dbContext.ApplicationUsers
                 .AsNoTracking()
                 .Include(x => x.Application)
-                .Include(x => x.Plan)
+                .Include(x => x.Subscriptions)
+                .ThenInclude(x => x.ApplicationPlan)
                 .SingleOrDefaultAsync(x => x.ApplicationId == applicationId && x.Id == userId, cancellationToken);
 
             if (user == null)
@@ -32,16 +33,21 @@ namespace Meran.Back.Controllers
                 return NotFound();
             }
 
+            var currentSubscription = user.Subscriptions
+                .OrderByDescending(x => x.StartedAt)
+                .FirstOrDefault();
+
             var status = new ApplicationUserStatusDto
             {
                 ApplicationId = user.ApplicationId,
                 ApplicationUserId = user.Id,
-                ApplicationPlanId = user.Plan?.Id ?? Guid.Empty,
+                SubscriptionId = currentSubscription?.Id ?? Guid.Empty,
+                ApplicationPlanId = currentSubscription?.ApplicationPlanId ?? Guid.Empty,
                 IsActive = user.IsActive,
-                Plan = user.Plan,
-                LastPaymentAt = user.LastPaymentAt,
-                NextPaymentDueAt = user.NextPaymentDueAt,
-                HasPaymentIssue = user.HasPaymentIssue
+                Plan = currentSubscription?.ApplicationPlan?.Name,
+                SubscriptionStatus = currentSubscription?.Status.ToString(),
+                TrialEndAt = currentSubscription?.TrialEndAt,
+                CurrentPeriodEnd = currentSubscription?.CurrentPeriodEnd
             };
 
             return Ok(status);

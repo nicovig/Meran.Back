@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Meran.Back.Data;
 using Meran.Back.DTO;
+using Meran.Back.Models;
 
 namespace Meran.Back.Services
 {
@@ -23,53 +24,59 @@ namespace Meran.Back.Services
         {
             var now = DateTime.UtcNow;
 
-            var users = await _dbContext.ApplicationUsers
-                .Include(u => u.Application)
-                .Where(u => u.IsActive && u.NextPaymentDueAt.HasValue && u.NextPaymentDueAt < now)
+            var subscriptions = await _dbContext.Subscriptions
+                .Include(x => x.ApplicationPlan)
+                .Include(x => x.ApplicationUser)
+                .ThenInclude(x => x.Application)
+                .Where(x => x.Status == SubscriptionStatus.Active && x.CurrentPeriodEnd < now)
                 .ToListAsync(cancellationToken);
 
-            foreach (var user in users)
+            foreach (var subscription in subscriptions)
             {
-                user.IsActive = false;
-                user.HasPaymentIssue = true;
+                subscription.Status = SubscriptionStatus.PastDue;
+                subscription.ApplicationUser.IsActive = false;
             }
 
-            if (users.Count > 0)
+            if (subscriptions.Count > 0)
             {
                 await _dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            return users.Select(u => new ApplicationUserPaymentIssueDto
+            return subscriptions.Select(x => new ApplicationUserPaymentIssueDto
             {
-                ApplicationId = u.ApplicationId,
-                ApplicationUserId = u.Id,
-                ApplicationName = u.Application.Name,
-                UserName = u.Name,
-                UserEmail = u.Email,
-                Plan = u.Plan,
-                LastPaymentAt = u.LastPaymentAt,
-                NextPaymentDueAt = u.NextPaymentDueAt
+                ApplicationId = x.ApplicationUser.ApplicationId,
+                ApplicationUserId = x.ApplicationUserId,
+                SubscriptionId = x.Id,
+                ApplicationName = x.ApplicationUser.Application.Name,
+                UserName = x.ApplicationUser.Name,
+                UserEmail = x.ApplicationUser.Email,
+                Plan = x.ApplicationPlan.Name,
+                TrialEndAt = x.TrialEndAt,
+                CurrentPeriodEnd = x.CurrentPeriodEnd
             }).ToList();
         }
 
         public async Task<List<ApplicationUserPaymentIssueDto>> GetCurrentPaymentIssuesAsync(CancellationToken cancellationToken)
         {
-            var users = await _dbContext.ApplicationUsers
+            var subscriptions = await _dbContext.Subscriptions
                 .AsNoTracking()
-                .Include(u => u.Application)
-                .Where(u => u.HasPaymentIssue)
+                .Include(x => x.ApplicationPlan)
+                .Include(x => x.ApplicationUser)
+                .ThenInclude(x => x.Application)
+                .Where(x => x.Status == SubscriptionStatus.PastDue)
                 .ToListAsync(cancellationToken);
 
-            return users.Select(u => new ApplicationUserPaymentIssueDto
+            return subscriptions.Select(x => new ApplicationUserPaymentIssueDto
             {
-                ApplicationId = u.ApplicationId,
-                ApplicationUserId = u.Id,
-                ApplicationName = u.Application.Name,
-                UserName = u.Name,
-                UserEmail = u.Email,
-                Plan = u.Plan,
-                LastPaymentAt = u.LastPaymentAt,
-                NextPaymentDueAt = u.NextPaymentDueAt
+                ApplicationId = x.ApplicationUser.ApplicationId,
+                ApplicationUserId = x.ApplicationUserId,
+                SubscriptionId = x.Id,
+                ApplicationName = x.ApplicationUser.Application.Name,
+                UserName = x.ApplicationUser.Name,
+                UserEmail = x.ApplicationUser.Email,
+                Plan = x.ApplicationPlan.Name,
+                TrialEndAt = x.TrialEndAt,
+                CurrentPeriodEnd = x.CurrentPeriodEnd
             }).ToList();
         }
     }

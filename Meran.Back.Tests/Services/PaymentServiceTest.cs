@@ -59,13 +59,33 @@ public class PaymentServiceTest
             Email = "user@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "pro",
-            IsActive = false,
-            HasPaymentIssue = true
+            IsActive = false
+        };
+
+        var plan = new ApplicationPlan
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = app.Id,
+            Name = "Pro",
+            Description = "Pro",
+            BillingPeriod = BillingPeriod.Monthly,
+            Price = 20
+        };
+
+        var subscription = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = user.Id,
+            ApplicationPlanId = plan.Id,
+            Status = SubscriptionStatus.PastDue,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(-1)
         };
 
         context.Applications.Add(app);
+        context.ApplicationPlans.Add(plan);
         context.ApplicationUsers.Add(user);
+        context.Subscriptions.Add(subscription);
         await context.SaveChangesAsync();
 
         var service = new PaymentService(context);
@@ -88,18 +108,14 @@ public class PaymentServiceTest
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.ApplicationUserId, Is.EqualTo(user.Id));
-        Assert.That(result.Type, Is.EqualTo("initial"));
+        Assert.That(result.Type, Is.EqualTo("paymentSucceeded"));
 
         var refreshedUser = await context.ApplicationUsers.SingleAsync(u => u.Id == user.Id);
+        var refreshedSubscription = await context.Subscriptions.SingleAsync(x => x.Id == subscription.Id);
 
         Assert.That(refreshedUser.IsActive, Is.True);
-        Assert.That(refreshedUser.HasPaymentIssue, Is.False);
-        Assert.That(refreshedUser.LastPaymentAt, Is.EqualTo(now));
-        Assert.That(refreshedUser.LastPaymentAmount, Is.EqualTo(20));
-        Assert.That(refreshedUser.LastPaymentCurrency, Is.EqualTo("EUR"));
-        Assert.That(refreshedUser.PaymentProvider, Is.EqualTo("stripe"));
-        Assert.That(refreshedUser.PaymentReference, Is.EqualTo("pay_123"));
-        Assert.That(refreshedUser.NextPaymentDueAt, Is.EqualTo(nextDue));
+        Assert.That(refreshedSubscription.Status, Is.EqualTo(SubscriptionStatus.Active));
+        Assert.That(refreshedSubscription.CurrentPeriodEnd, Is.EqualTo(nextDue));
     }
 
     [Test]
@@ -124,13 +140,33 @@ public class PaymentServiceTest
             Email = "user@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "pro",
-            IsActive = true,
-            HasPaymentIssue = false
+            IsActive = true
+        };
+
+        var plan = new ApplicationPlan
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = app.Id,
+            Name = "Pro",
+            Description = "Pro",
+            BillingPeriod = BillingPeriod.Monthly,
+            Price = 20
+        };
+
+        var subscription = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = user.Id,
+            ApplicationPlanId = plan.Id,
+            Status = SubscriptionStatus.Active,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(10)
         };
 
         context.Applications.Add(app);
+        context.ApplicationPlans.Add(plan);
         context.ApplicationUsers.Add(user);
+        context.Subscriptions.Add(subscription);
         await context.SaveChangesAsync();
 
         var service = new PaymentService(context);
@@ -148,11 +184,11 @@ public class PaymentServiceTest
         var result = await service.AddPaymentAsync(app.Id, user.Id, request, CancellationToken.None);
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.Type, Is.EqualTo("failed"));
+        Assert.That(result!.Type, Is.EqualTo("paymentFailed"));
 
-        var refreshedUser = await context.ApplicationUsers.SingleAsync(u => u.Id == user.Id);
+        var refreshedSubscription = await context.Subscriptions.SingleAsync(x => x.Id == subscription.Id);
 
-        Assert.That(refreshedUser.HasPaymentIssue, Is.True);
+        Assert.That(refreshedSubscription.Status, Is.EqualTo(SubscriptionStatus.PastDue));
     }
 
     [Test]
@@ -186,11 +222,7 @@ public class PaymentServiceTest
             Email = "user1@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "pro",
-            IsActive = true,
-            LastPaymentAmount = 30,
-            LastPaymentCurrency = "EUR",
-            NextPaymentDueAt = DateTime.UtcNow.AddDays(10)
+            IsActive = true
         };
 
         var user2 = new ApplicationUser
@@ -201,19 +233,56 @@ public class PaymentServiceTest
             Email = "user2@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "basic",
-            IsActive = false,
-            LastPaymentAmount = 15,
-            LastPaymentCurrency = "USD",
-            NextPaymentDueAt = DateTime.UtcNow.AddDays(5)
+            IsActive = false
+        };
+
+        var plan1 = new ApplicationPlan
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = app1.Id,
+            Name = "Pro",
+            Description = "Pro",
+            BillingPeriod = BillingPeriod.Monthly,
+            Price = 30
+        };
+
+        var plan2 = new ApplicationPlan
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = app2.Id,
+            Name = "Basic",
+            Description = "Basic",
+            BillingPeriod = BillingPeriod.Monthly,
+            Price = 15
+        };
+
+        var sub1 = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = user1.Id,
+            ApplicationPlanId = plan1.Id,
+            Status = SubscriptionStatus.Active,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(10)
+        };
+
+        var sub2 = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = user2.Id,
+            ApplicationPlanId = plan2.Id,
+            Status = SubscriptionStatus.Canceled,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(5)
         };
 
         var evt1 = new PaymentEvent
         {
             Id = Guid.NewGuid(),
             ApplicationId = app1.Id,
-            ApplicationUserId = user1.Id,
-            Type = PaymentEventType.Initial,
+            SubscriptionId = sub1.Id,
+            EventType = PaymentEventType.PaymentSucceeded,
+            Status = "succeeded",
             Amount = 30,
             Currency = "EUR",
             OccurredAt = DateTime.UtcNow.AddDays(-1)
@@ -223,15 +292,18 @@ public class PaymentServiceTest
         {
             Id = Guid.NewGuid(),
             ApplicationId = app2.Id,
-            ApplicationUserId = user2.Id,
-            Type = PaymentEventType.Recurring,
+            SubscriptionId = sub2.Id,
+            EventType = PaymentEventType.PaymentSucceeded,
+            Status = "succeeded",
             Amount = 15,
             Currency = "USD",
             OccurredAt = DateTime.UtcNow.AddDays(-2)
         };
 
         context.Applications.AddRange(app1, app2);
+        context.ApplicationPlans.AddRange(plan1, plan2);
         context.ApplicationUsers.AddRange(user1, user2);
+        context.Subscriptions.AddRange(sub1, sub2);
         context.PaymentEvents.AddRange(evt1, evt2);
         await context.SaveChangesAsync();
 
@@ -279,11 +351,7 @@ public class PaymentServiceTest
             Email = "user1@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "pro",
-            IsActive = true,
-            LastPaymentAmount = 30,
-            LastPaymentCurrency = "EUR",
-            NextPaymentDueAt = DateTime.UtcNow.AddDays(10)
+            IsActive = true
         };
 
         var user2 = new ApplicationUser
@@ -294,19 +362,56 @@ public class PaymentServiceTest
             Email = "user2@example.com",
             Origin = UserOrigin.Admin,
             CreatedAt = DateTime.UtcNow,
-            Plan = "basic",
-            IsActive = true,
-            LastPaymentAmount = 15,
-            LastPaymentCurrency = "USD",
-            NextPaymentDueAt = DateTime.UtcNow.AddDays(5)
+            IsActive = true
+        };
+
+        var plan1 = new ApplicationPlan
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = app1.Id,
+            Name = "Pro",
+            Description = "Pro",
+            BillingPeriod = BillingPeriod.Monthly,
+            Price = 30
+        };
+
+        var plan2 = new ApplicationPlan
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = app2.Id,
+            Name = "Basic",
+            Description = "Basic",
+            BillingPeriod = BillingPeriod.Monthly,
+            Price = 15
+        };
+
+        var sub1 = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = user1.Id,
+            ApplicationPlanId = plan1.Id,
+            Status = SubscriptionStatus.Active,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(10)
+        };
+
+        var sub2 = new Subscription
+        {
+            Id = Guid.NewGuid(),
+            ApplicationUserId = user2.Id,
+            ApplicationPlanId = plan2.Id,
+            Status = SubscriptionStatus.Active,
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(5)
         };
 
         var evt1 = new PaymentEvent
         {
             Id = Guid.NewGuid(),
             ApplicationId = app1.Id,
-            ApplicationUserId = user1.Id,
-            Type = PaymentEventType.Initial,
+            SubscriptionId = sub1.Id,
+            EventType = PaymentEventType.PaymentSucceeded,
+            Status = "succeeded",
             Amount = 30,
             Currency = "EUR",
             OccurredAt = DateTime.UtcNow.AddDays(-1)
@@ -316,15 +421,18 @@ public class PaymentServiceTest
         {
             Id = Guid.NewGuid(),
             ApplicationId = app2.Id,
-            ApplicationUserId = user2.Id,
-            Type = PaymentEventType.Recurring,
+            SubscriptionId = sub2.Id,
+            EventType = PaymentEventType.PaymentSucceeded,
+            Status = "succeeded",
             Amount = 15,
             Currency = "USD",
             OccurredAt = DateTime.UtcNow.AddDays(-2)
         };
 
         context.Applications.AddRange(app1, app2);
+        context.ApplicationPlans.AddRange(plan1, plan2);
         context.ApplicationUsers.AddRange(user1, user2);
+        context.Subscriptions.AddRange(sub1, sub2);
         context.PaymentEvents.AddRange(evt1, evt2);
         await context.SaveChangesAsync();
 
