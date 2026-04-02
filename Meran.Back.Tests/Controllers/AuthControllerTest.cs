@@ -1,13 +1,16 @@
+using System.IO;
+using System.Text;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Meran.Back.Controllers;
 using Meran.Back.Data;
 using Meran.Back.DTO;
 using Meran.Back.Models;
 using Meran.Back.Services;
 using Moq;
-using Microsoft.Extensions.Options;
 
 namespace Meran.Back.Tests.Controllers;
 
@@ -44,13 +47,18 @@ public class AuthControllerTest
         return context;
     }
 
+    private static IOptions<MachineClientOptions> EmptyMachineClientOptions()
+    {
+        return Options.Create(new MachineClientOptions());
+    }
+
     [Test]
     public async Task Login_ReturnsUnauthorized_WhenUserDoesNotExist()
     {
         using var context = CreateInMemoryDbContext();
         var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
         var passwordService = CreatePasswordService();
-        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService, EmptyMachineClientOptions());
 
         var request = new LoginRequestDto
         {
@@ -69,7 +77,7 @@ public class AuthControllerTest
         using var context = CreateInMemoryDbContext();
         var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
         var passwordService = CreatePasswordService();
-        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService, EmptyMachineClientOptions());
 
         const string salt = SaltInvalidPassword;
         var admin = new Administrator
@@ -104,7 +112,7 @@ public class AuthControllerTest
         using var context = CreateInMemoryDbContext();
         var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
         var passwordService = CreatePasswordService();
-        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService, EmptyMachineClientOptions());
 
         const string salt = SaltInactive;
         var admin = new Administrator
@@ -166,7 +174,7 @@ public class AuthControllerTest
             .Setup(s => s.GetAccessTokenExpirationUtc())
             .Returns(expectedExpiry);
 
-        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService, EmptyMachineClientOptions());
 
         var request = new LoginRequestDto
         {
@@ -195,7 +203,7 @@ public class AuthControllerTest
         using var context = CreateInMemoryDbContext();
         var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
         var passwordService = CreatePasswordService();
-        var controller = new AuthController(context, tokenServiceMock.Object, passwordService);
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService, EmptyMachineClientOptions());
 
         var admin = new Administrator
         {
@@ -221,6 +229,83 @@ public class AuthControllerTest
         var result = await controller.Login(request, CancellationToken.None);
 
         Assert.That(result.Result, Is.TypeOf<UnauthorizedObjectResult>());
+    }
+
+    [Test]
+    public async Task Token_Returns503_WhenMachineClientSecretNotConfigured()
+    {
+        using var context = CreateInMemoryDbContext();
+        var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
+        var passwordService = CreatePasswordService();
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService, EmptyMachineClientOptions())
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+
+        var result = await controller.Token(CancellationToken.None);
+
+        Assert.That(result, Is.TypeOf<ObjectResult>());
+        var obj = (ObjectResult)result;
+        Assert.That(obj.StatusCode, Is.EqualTo(503));
+    }
+
+    [Test]
+    public async Task Token_ReturnsUnauthorized_WhenInvalidClient()
+    {
+        using var context = CreateInMemoryDbContext();
+        var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
+        var passwordService = CreatePasswordService();
+        var options = Options.Create(new MachineClientOptions
+        {
+            ClientId = "kalon-backend",
+            ClientSecret = "correct-secret",
+            Role = "ApiClient",
+            AccessTokenExpiresMinutes = 60
+        });
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService, options);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.ContentType = "application/json";
+        var body = """{"grant_type":"client_credentials","client_id":"kalon-backend","client_secret":"wrong"}""";
+        httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = await controller.Token(CancellationToken.None);
+
+        Assert.That(result, Is.TypeOf<UnauthorizedObjectResult>());
+    }
+
+    [Test]
+    public async Task Token_ReturnsOk_WhenCredentialsValid()
+    {
+        using var context = CreateInMemoryDbContext();
+        var tokenServiceMock = new Mock<ITokenService>(MockBehavior.Strict);
+        var passwordService = CreatePasswordService();
+        var options = Options.Create(new MachineClientOptions
+        {
+            ClientId = "kalon-backend",
+            ClientSecret = "correct-secret",
+            Role = "ApiClient",
+            AccessTokenExpiresMinutes = 60
+        });
+        tokenServiceMock
+            .Setup(s => s.GenerateMachineAccessToken("kalon-backend", "ApiClient", 60))
+            .Returns("m2m-token");
+
+        var controller = new AuthController(context, tokenServiceMock.Object, passwordService, options);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.ContentType = "application/json";
+        var body = """{"grant_type":"client_credentials","client_id":"kalon-backend","client_secret":"correct-secret"}""";
+        httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = await controller.Token(CancellationToken.None);
+
+        Assert.That(result, Is.TypeOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var dto = (ClientCredentialsTokenResponseDto)ok.Value!;
+        Assert.That(dto.access_token, Is.EqualTo("m2m-token"));
+        Assert.That(dto.expires_in, Is.EqualTo(3600));
+        tokenServiceMock.VerifyAll();
     }
 }
 

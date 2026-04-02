@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Meran.Back.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260401124247_SaasArchitectureRefactor")]
-    partial class SaasArchitectureRefactor
+    [Migration("20260401132547_Initial migration")]
+    partial class Initialmigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

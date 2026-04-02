@@ -64,7 +64,7 @@ public class TokenServiceTest
         {
             Id = Guid.NewGuid(),
             Email = "admin@example.com",
-            Role = null
+            Role = null!
         };
 
         var tokenString = service.GenerateAccessToken(user);
@@ -92,6 +92,25 @@ public class TokenServiceTest
 
         Assert.That(expiration, Is.GreaterThanOrEqualTo(expectedMin));
         Assert.That(expiration, Is.LessThanOrEqualTo(expectedMax));
+    }
+
+    [Test]
+    public void GenerateMachineAccessToken_ContainsExpectedClaims()
+    {
+        var service = CreateService(45);
+
+        var tokenString = service.GenerateMachineAccessToken("kalon-backend", "ApiClient", 45);
+
+        var handler = new JwtSecurityTokenHandler();
+        var token = handler.ReadJwtToken(tokenString);
+
+        var sub = token.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var clientId = token.Claims.FirstOrDefault(c => c.Type == "client_id")?.Value;
+        var role = token.Claims.FirstOrDefault(c => c.Type == "role")?.Value;
+
+        Assert.That(sub, Is.EqualTo("kalon-backend"));
+        Assert.That(clientId, Is.EqualTo("kalon-backend"));
+        Assert.That(role, Is.EqualTo("ApiClient"));
     }
 }
 

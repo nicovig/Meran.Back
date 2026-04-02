@@ -28,6 +28,9 @@ namespace Meran.Back.Services
 
         public string HashPassword(string password, string salt)
         {
+            password = password.Trim();
+            salt = salt.Trim();
+
             var saltBytes = BuildSaltBytes(salt);
             var hashBytes = Rfc2898DeriveBytes.Pbkdf2(password, saltBytes, _options.Iterations, HashAlgorithmName.SHA256, _options.HashSize);
             return Convert.ToBase64String(hashBytes);
@@ -35,10 +38,20 @@ namespace Meran.Back.Services
 
         public bool VerifyPassword(string password, string passwordHash, string salt)
         {
-            if (string.IsNullOrWhiteSpace(salt) || string.IsNullOrWhiteSpace(passwordHash) || string.IsNullOrWhiteSpace(_options.Pepper))
+            if (string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(passwordHash))
             {
                 return false;
             }
+
+            password = password.Trim();
+            passwordHash = passwordHash.Trim();
+
+            if (string.IsNullOrWhiteSpace(salt) || string.IsNullOrWhiteSpace(_options.Pepper))
+            {
+                return false;
+            }
+
+            salt = salt.Trim();
 
             byte[] storedHash;
             try
@@ -50,19 +63,7 @@ namespace Meran.Back.Services
                 return false;
             }
 
-            byte[] saltBytes;
-            try
-            {
-                saltBytes = BuildSaltBytes(salt);
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
+            var saltBytes = BuildSaltBytes(salt);
 
             var computedHash = Rfc2898DeriveBytes.Pbkdf2(password, saltBytes, _options.Iterations, HashAlgorithmName.SHA256, storedHash.Length);
             return CryptographicOperations.FixedTimeEquals(storedHash, computedHash);

@@ -18,7 +18,7 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[] { "http://localhost:60716", "http://localhost:5173", "http://localhost:4400" };
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[] { "http://localhost:60716", "http://localhost:5173", "http://localhost:4200" };
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
@@ -35,6 +35,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 });
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<MachineClientOptions>(builder.Configuration.GetSection("MachineClients:Kalon"));
 builder.Services.Configure<PasswordOptions>(builder.Configuration.GetSection("Password"));
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
@@ -66,7 +67,7 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = securityKey,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.FromMinutes(1),
-        RoleClaimType = ClaimTypes.Role,
+        RoleClaimType = "role",
         NameClaimType = ClaimTypes.NameIdentifier
     };
     options.Events = new JwtBearerEvents
