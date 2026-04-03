@@ -67,7 +67,6 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = securityKey,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.FromMinutes(1),
-        RoleClaimType = "role",
         NameClaimType = ClaimTypes.NameIdentifier
     };
     options.Events = new JwtBearerEvents

@@ -5,7 +5,7 @@ namespace Meran.Back.Models
         public string Issuer { get; set; } = null!;
         public string Audience { get; set; } = null!;
         public string SigningKey { get; set; } = null!;
-        public int AccessTokenExpiresMinutes { get; set; } = 120;
+        public int AccessTokenExpiresMinutes { get; set; } = 180;
     }
 }
 
