@@ -41,6 +41,7 @@ namespace Meran.Back.Controllers
         [HttpPost("login")]
         public async Task<ActionResult<AuthResponseDto>> Login(LoginRequestDto request, CancellationToken cancellationToken)
         {
+            Console.WriteLine("Login");
             var email = request.Email.Trim().ToLowerInvariant();
 
             var user = await _dbContext.Administrators.SingleOrDefaultAsync(x => x.Email == email, cancellationToken);
