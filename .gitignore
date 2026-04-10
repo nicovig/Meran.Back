@@ -5,3 +5,4 @@ tools
 Meran.Back.Tests/obj
 Meran.Back.Tests/bin
 Meran.Back/appsettings.Production.json
+/Meran.Back/appsettings.Development.json
