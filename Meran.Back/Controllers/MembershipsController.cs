@@ -25,7 +25,9 @@ namespace Meran.Back.Controllers
                 .AsNoTracking()
                 .Include(x => x.Application)
                 .Include(x => x.Subscriptions)
-                .ThenInclude(x => x.ApplicationPlan)
+                    .ThenInclude(x => x.ApplicationPlan)
+                        .ThenInclude(p => p.FeatureValues)
+                            .ThenInclude(fv => fv.ApplicationFeature)
                 .SingleOrDefaultAsync(x => x.ApplicationId == applicationId && x.Id == userId, cancellationToken);
 
             if (user == null)
@@ -37,6 +39,13 @@ namespace Meran.Back.Controllers
                 .OrderByDescending(x => x.StartedAt)
                 .FirstOrDefault();
 
+            // charger les features du plan actif
+            var features = currentSubscription?.ApplicationPlan?.FeatureValues
+                .ToDictionary(
+                    fv => fv.ApplicationFeature.Key,
+                    fv => fv.Value)
+                ?? new Dictionary<string, string>();
+
             var status = new ApplicationUserStatusDto
             {
                 ApplicationId = user.ApplicationId,
@@ -47,7 +56,8 @@ namespace Meran.Back.Controllers
                 Plan = currentSubscription?.ApplicationPlan?.Name,
                 SubscriptionStatus = currentSubscription?.Status.ToString(),
                 TrialEndAt = currentSubscription?.TrialEndAt,
-                CurrentPeriodEnd = currentSubscription?.CurrentPeriodEnd
+                CurrentPeriodEnd = currentSubscription?.CurrentPeriodEnd,
+                Features = features 
             };
 
             return Ok(status);
