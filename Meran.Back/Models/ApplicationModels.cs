@@ -26,7 +26,8 @@ namespace Meran.Back.Models
     {
         Integer,
         Boolean,
-        String
+        String,
+        Decimal
     }
 
     public enum ApplicationMembershipRole
