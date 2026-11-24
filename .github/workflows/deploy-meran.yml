@@ -33,6 +33,7 @@ jobs:
           file: ./Meran.Back/Dockerfile
           push: true
           tags: ghcr.io/${{ env.IMAGE_NAME }}:latest
+          no-cache: true
 
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1
