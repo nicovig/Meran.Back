@@ -38,10 +38,78 @@ namespace Meran.Back.Controllers
             _machineClientOptions = machineClientOptions.Value;
         }
 
+        // À ajouter dans AuthController.cs
+
+        [HttpPost("application-login")]
+        [AllowAnonymous]
+        public async Task<ActionResult<ApplicationAuthResponseDto>> ApplicationLogin([FromBody] ApplicationLoginRequestDto request, CancellationToken cancellationToken)
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+
+            // vérifier que l'application existe
+            var application = await _dbContext.Applications
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    x => x.Id == request.ApplicationId,
+                    cancellationToken);
+
+            if (application == null)
+                return Unauthorized(new { message = "Application inconnue." });
+
+            // trouver l'utilisateur dans cette application
+            var appUser = await _dbContext.ApplicationUsers
+                .Include(u => u.Subscriptions)
+                    .ThenInclude(s => s.ApplicationPlan)
+                        .ThenInclude(p => p.FeatureValues)
+                            .ThenInclude(fv => fv.ApplicationFeature)
+                .SingleOrDefaultAsync(
+                    x => x.ApplicationId == request.ApplicationId
+                        && x.Email == email,
+                    cancellationToken);
+
+            if (appUser == null)
+                return NotFound(new { message = "Utilisateur introuvable." });
+
+            if (!appUser.IsActive)
+                return Unauthorized(new { message = "Utilisateur inactif." });
+
+            var currentSubscription = appUser.Subscriptions
+                .OrderByDescending(s => s.StartedAt)
+                .FirstOrDefault();
+
+            var features = currentSubscription?.ApplicationPlan?.FeatureValues
+                .ToDictionary(
+                    fv => fv.ApplicationFeature.Key,
+                    fv => fv.Value)
+                ?? new Dictionary<string, string>();
+
+            var planName = currentSubscription?.ApplicationPlan?.Name ?? "free";
+
+            var token = _tokenService.GenerateApplicationUserAccessToken(
+                appUser, planName, features);
+
+            return Ok(new ApplicationAuthResponseDto
+            {
+                AccessToken = token,
+                ExpiresAtUtc = _tokenService.GetAccessTokenExpirationUtc(),
+                User = new ApplicationUserDto
+                {
+                    Id = appUser.Id,
+                    ApplicationId = appUser.ApplicationId,
+                    Name = appUser.Name,
+                    Email = appUser.Email,
+                    Origin = appUser.Origin.ToString(),
+                    CreatedAt = appUser.CreatedAt,
+                    Plan = planName
+                },
+                Plan = planName,
+                Features = features
+            });
+        }
+
         [HttpPost("login")]
         public async Task<ActionResult<AuthResponseDto>> Login(LoginRequestDto request, CancellationToken cancellationToken)
         {
-            Console.WriteLine("Login");
             var email = request.Email.Trim().ToLowerInvariant();
 
             var user = await _dbContext.Administrators.SingleOrDefaultAsync(x => x.Email == email, cancellationToken);

@@ -20,6 +20,7 @@ namespace Meran.Back.DTO
         public DateTime CreatedAt { get; set; }
         public string? Plan { get; set; }
     }
+        
 
     public class ApplicationDto
     {
@@ -56,6 +57,22 @@ namespace Meran.Back.DTO
         public string Name { get; set; } = null!;
         public string Email { get; set; } = null!;
         public string? Plan { get; set; }
+    }
+
+    public class ApplicationLoginRequestDto
+    {
+        public Guid ApplicationId { get; set; }
+        public string Email { get; set; } = null!;
+        public string Password { get; set; } = null!;
+    }
+
+    public class ApplicationAuthResponseDto
+    {
+        public string AccessToken { get; set; } = null!;
+        public DateTime ExpiresAtUtc { get; set; }
+        public ApplicationUserDto User { get; set; } = null!;
+        public string Plan { get; set; } = null!;
+        public Dictionary<string, string> Features { get; set; } = new();
     }
 }
 

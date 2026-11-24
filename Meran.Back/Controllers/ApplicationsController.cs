@@ -58,6 +58,7 @@ namespace Meran.Back.Controllers
         }
 
         [HttpPost("{applicationId:guid}/users")]
+        [Authorize(Roles = "Admin,ApiClient")]
         public async Task<ActionResult<ApplicationUserDto>> AddUser(Guid applicationId, AddApplicationUserRequestDto request, CancellationToken cancellationToken)
         {
             try
