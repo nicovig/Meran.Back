@@ -63,6 +63,7 @@ namespace Meran.Back.Controllers
         {
             try
             {
+                Console.WriteLine("AddUser");
                 var user = await _applicationService.AddUserAsync(applicationId, request, cancellationToken);
                 if (user == null)
                 {
